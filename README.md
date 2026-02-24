@@ -1,7 +1,5 @@
 # LogLLM (DeBERTa-v3-Large + Llama-3.1-8B)
 
-Fork of the original project: `https://github.com/guanwei49/LogLLM`
-
 ## 1. Changes
 
 - Changed the models BERT + Llama setup to `DeBERTa-v3-Large` + `Llama-3.1-8B`.
