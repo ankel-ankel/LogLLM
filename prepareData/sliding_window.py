@@ -1,14 +1,17 @@
 import os.path
-
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from helper import sliding_window, fixedSize_window, structure_log
+try:
+    from prepareData.helper import sliding_window, fixedSize_window, structure_log
+except ModuleNotFoundError:
+    from helper import sliding_window, fixedSize_window, structure_log
 
 #### for Thunderbird, Liberty, BGL
 
-
-data_dir = r'/mnt/public/gw/SyslogData/BGL'
+ROOT_DIR = Path(__file__).resolve().parents[1]
+data_dir = str(ROOT_DIR / "data" / "BGL")
 log_name = "BGL.log"
 
 start_line = 0
@@ -146,12 +149,11 @@ if __name__ == '__main__':
     print(f"number of anomalous sessions: {num_anomalous_test}; number of normal sessions: {num_normal_test}; number of total sessions: {len(session_test_df['Label'])}\n")
 
     with open(os.path.join(output_dir, 'train_info.txt'), 'w') as file:
-        # 写入内容到文件
+        # Write summary stats to file
         file.write(f"max session length: {max_session_train_len}; mean session length: {mean_session_train_len}\n")
         file.write(f"number of anomalous sessions: {num_anomalous_train}; number of normal sessions: {num_normal_train}; number of total sessions: {len(session_train_df['Label'])}\n")
 
     with open(os.path.join(output_dir, 'test_info.txt'), 'w') as file:
-        # 写入内容到文件
+        # Write summary stats to file
         file.write(f"max session length: {max_session_test_len}; mean session length: {mean_session_test_len}\n")
         file.write(f"number of anomalous sessions: {num_anomalous_test}; number of normal sessions: {num_normal_test}; number of total sessions: {len(session_test_df['Label'])}\n")
-

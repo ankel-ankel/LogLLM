@@ -1,4 +1,3 @@
-import os
 import re
 from pathlib import Path
 import numpy as np
@@ -12,14 +11,14 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 max_content_len = 100
 max_seq_len = 128
 batch_size = 32
-dataset_name = 'Liberty'   # 'Thunderbird' 'HDFS_v1'  'BGL'  'Liberty‘
-data_path = r'/mnt/public/gw/SyslogData/{}/test.csv'.format(dataset_name)
+dataset_name = 'BGL'  # 'Thunderbird' 'HDFS_v1' 'BGL' 'Liberty'
+ft_dataset_name = 'HDFS' if dataset_name == 'HDFS_v1' else dataset_name
 
-Bert_path = r"/mnt/public/gw/LLM_model/bert-base-uncased"
-Llama_path = r"/mnt/public/gw/LLM_model/Meta-Llama-3-8B"
-
-ROOT_DIR = Path(__file__).parent
-ft_path = os.path.join(ROOT_DIR, r"ft_model_{}".format(dataset_name))
+ROOT_DIR = Path(__file__).resolve().parent
+data_path = ROOT_DIR / 'data' / dataset_name / 'test.csv'
+Bert_path = ROOT_DIR / 'models' / 'deberta-v3-large'
+Llama_path = ROOT_DIR / 'models' / 'Meta-Llama-3.1-8B'
+ft_path = ROOT_DIR / f'ft_model_{ft_dataset_name}'
 
 device = torch.device("cuda:0")
 
@@ -28,6 +27,7 @@ f'dataset_name: {dataset_name}\n'
 f'batch_size: {batch_size}\n'
 f'max_content_len: {max_content_len}\n'
 f'max_seq_len: {max_seq_len}\n'
+f'ft_path: {ft_path}\n'
 f'device: {device}')
 
 
@@ -37,14 +37,14 @@ def evalModel(model, dataloader):
     preds = []
 
     with torch.no_grad():
-        for bathc_i in tqdm(dataloader):
-            inputs = bathc_i['inputs']
-            seq_positions = bathc_i['seq_positions']
+        for batch_i in tqdm(dataloader):
+            inputs = batch_i['inputs']
+            seq_positions = batch_i['seq_positions']
 
             inputs = inputs.to(device)
             seq_positions = seq_positions
 
-            outputs_ids = model(inputs,seq_positions)
+            outputs_ids = model(inputs, seq_positions)
             outputs = model.Llama_tokenizer.batch_decode(outputs_ids)
 
             # print(outputs)
@@ -54,7 +54,7 @@ def evalModel(model, dataloader):
                 if match:
                     preds.append(match.group())
                 else:
-                    print(f'error :{text}')
+                    print(f'error: {text}')
                     preds.append('')
 
     preds_copy = np.array(preds)
@@ -83,9 +83,15 @@ def evalModel(model, dataloader):
 
 
 if __name__ == '__main__':
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for this project (4-bit bitsandbytes quantization).")
+    for required_path in (data_path, Bert_path, Llama_path, ft_path):
+        if not required_path.exists():
+            raise FileNotFoundError(f"Missing required path: {required_path}")
+
     print(f'dataset: {data_path}')
-    dataset = CustomDataset(data_path)
-    model = LogLLM(Bert_path, Llama_path, ft_path=ft_path, is_train_mode=False, device=device,
+    dataset = CustomDataset(str(data_path))
+    model = LogLLM(str(Bert_path), str(Llama_path), ft_path=str(ft_path), is_train_mode=False, device=device,
                    max_content_len=max_content_len, max_seq_len=max_seq_len)
 
     tokenizer = model.Bert_tokenizer

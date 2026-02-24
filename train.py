@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import numpy as np
 import torch
@@ -14,7 +13,8 @@ n_epochs_1 = 1
 n_epochs_2_1 = 1
 n_epochs_2_2 = 1
 n_epochs_3 = 2
-dataset_name = 'Liberty'  # 'Thunderbird' 'HDFS_v1' 'BGL'   'Liberty'
+dataset_name = 'BGL'  # 'Thunderbird' 'HDFS_v1' 'BGL'   'Liberty'
+ft_dataset_name = 'HDFS' if dataset_name == 'HDFS_v1' else dataset_name
 batch_size = 16
 micro_batch_size = 4
 gradient_accumulation_steps = batch_size // micro_batch_size
@@ -27,15 +27,15 @@ lr_3 = 5e-5
 max_content_len = 100
 max_seq_len = 128
 
-data_path = r'/mnt/public/gw/SyslogData/{}/train.csv'.format(dataset_name)
+ROOT_DIR = Path(__file__).resolve().parent
+data_path = ROOT_DIR / 'data' / dataset_name / 'train.csv'
 
 min_less_portion = 0.3
 
-Bert_path = r"/mnt/public/gw/LLM_model/bert-base-uncased"
-Llama_path = r"/mnt/public/gw/LLM_model/Meta-Llama-3-8B"
+Bert_path = ROOT_DIR / 'models' / 'deberta-v3-large'
+Llama_path = ROOT_DIR / 'models' / 'Meta-Llama-3.1-8B'
 
-ROOT_DIR = Path(__file__).parent
-ft_path = os.path.join(ROOT_DIR, r"ft_model_{}".format(dataset_name))
+ft_path = ROOT_DIR / f'ft_model_{ft_dataset_name}'
 
 device = torch.device("cuda:0")
 
@@ -53,6 +53,7 @@ f'lr_3: {lr_3}\n'
 f'max_content_len: {max_content_len}\n'
 f'max_seq_len: {max_seq_len}\n'
 f'min_less_portion: {min_less_portion}\n'
+f'ft_path: {ft_path}\n'
 f'device: {device}')
 
 def print_number_of_trainable_model_parameters(model):
@@ -91,12 +92,12 @@ def trainModel(model, dataloader, gradient_accumulation_steps, n_epochs, lr):
         total_acc, total_acc_count, total_count, train_loss = 0, 0, 0, 0
 
         pbar = tqdm(dataloader, desc='Epoch {}/{}'.format(epoch, n_epochs))
-        for i_th, bathc_i in enumerate(pbar):
+        for i_th, batch_i in enumerate(pbar):
             steps += 1
 
-            inputs= bathc_i['inputs']
-            seq_positions= bathc_i['seq_positions']
-            labels = bathc_i['labels']
+            inputs = batch_i['inputs']
+            seq_positions = batch_i['seq_positions']
+            labels = batch_i['labels']
 
             inputs = inputs.to(device)
             seq_positions = seq_positions
@@ -111,8 +112,8 @@ def trainModel(model, dataloader, gradient_accumulation_steps, n_epochs, lr):
 
             if ((i_th + 1) % gradient_accumulation_steps == 0) or ((i_th + 1) == len(dataloader)):
                 # optimizer the net
-                optimizer.step()  # 更新网络参数
-                optimizer.zero_grad()  # reset grdient # 清空过往梯度
+                optimizer.step()  # Update model parameters.
+                optimizer.zero_grad()  # Clear accumulated gradients.
 
             acc_mask = torch.zeros_like(targets,device=device).bool()
             for token in special_normal_tokens.union(special_anomalous_tokens):
@@ -146,10 +147,16 @@ def trainModel(model, dataloader, gradient_accumulation_steps, n_epochs, lr):
                   f"[acc: {train_acc_epoch:3f}]")
 
 if __name__ == '__main__':
-    print(f'dataset: {data_path}')
-    dataset = CustomDataset(data_path, drop_duplicates=False)
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for this project (4-bit bitsandbytes quantization).")
+    for required_path in (data_path, Bert_path, Llama_path):
+        if not required_path.exists():
+            raise FileNotFoundError(f"Missing required path: {required_path}")
 
-    model = LogLLM(Bert_path, Llama_path, device = device, max_content_len = max_content_len, max_seq_len = max_seq_len)
+    print(f'dataset: {data_path}')
+    dataset = CustomDataset(str(data_path), drop_duplicates=False)
+
+    model = LogLLM(str(Bert_path), str(Llama_path), device = device, max_content_len = max_content_len, max_seq_len = max_seq_len)
     # model = LogLLM(Bert_path, Llama_path, ft_path= ft_path, device = device, max_content_len = max_content_len, max_seq_len = max_seq_len)
 
     tokenizer = model.Bert_tokenizer
@@ -190,4 +197,4 @@ if __name__ == '__main__':
     print("*" * 10 + "Start training entire model" + "*" * 10)
     trainModel(model, dataloader, gradient_accumulation_steps, n_epochs_3, lr_3)
 
-    model.save_ft_model(ft_path)
+    model.save_ft_model(str(ft_path))
