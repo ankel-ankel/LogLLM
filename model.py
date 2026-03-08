@@ -186,6 +186,10 @@ class LogLLM(nn.Module):
             )
             self.Llama_model = get_peft_model(self.Llama_model, Llama_peft_config)
 
+        if is_train_mode:
+            self.encoder_model.enable_input_require_grads()
+            self.encoder_model.gradient_checkpointing_enable()
+
         self._refresh_legacy_aliases()
 
     def _refresh_legacy_aliases(self):
