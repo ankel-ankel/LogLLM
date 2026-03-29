@@ -22,7 +22,7 @@ batch_size = 16
 micro_batch_size = 1
 gradient_accumulation_steps = batch_size // micro_batch_size
 
-resume = False  # True = continue from last checkpoint | False = train from scratch
+resume = 'train'
 
 lr_1 = 5e-4
 lr_2_1 = 5e-4
@@ -40,31 +40,30 @@ Bert_path = ROOT_DIR / 'models' / 'deberta-v3-large'
 Llama_path = ROOT_DIR / 'models' / 'Meta-Llama-3.1-8B'
 
 ft_path = ROOT_DIR / f'ft_model_{ft_dataset_name}'
-ckpt_path = ft_path / 'checkpoint'
-phase_file = ckpt_path / 'phase.txt'
 
-# Phase order used for resume logic
 PHASES = ['phase1', 'phase2_1', 'phase2_2', 'phase3']
 
 device = torch.device("cuda:0")
 
-print(f'n_epochs_1: {n_epochs_1}\n'
-f'n_epochs_2_1: {n_epochs_2_1}\n'
-f'n_epochs_2_2: {n_epochs_2_2}\n'
-f'n_epochs_3: {n_epochs_3}\n'
-f'dataset_name: {dataset_name}\n'
-f'batch_size: {batch_size}\n'
-f'micro_batch_size: {micro_batch_size}\n'
-f'resume: {resume}\n'
-f'lr_1: {lr_1}\n'
-f'lr_2_1: {lr_2_1}\n'
-f'lr_2_2: {lr_2_2}\n'
-f'lr_3: {lr_3}\n'
-f'max_content_len: {max_content_len}\n'
-f'max_seq_len: {max_seq_len}\n'
-f'min_less_portion: {min_less_portion}\n'
-f'ft_path: {ft_path}\n'
-f'device: {device}')
+
+def get_next_run_dir(base_path):
+    existing = []
+    if base_path.exists():
+        for d in base_path.iterdir():
+            if d.is_dir() and d.name.startswith('train'):
+                suffix = d.name[5:]
+                if suffix == '':
+                    existing.append(1)
+                elif suffix.isdigit():
+                    existing.append(int(suffix))
+    if not existing:
+        run_dir = base_path / 'train'
+    else:
+        next_num = max(existing) + 1
+        run_dir = base_path / f'train{next_num}'
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
 
 def print_number_of_trainable_model_parameters(model):
     params = set()
@@ -155,14 +154,13 @@ def trainModel(model, dataloader, gradient_accumulation_steps, n_epochs, lr):
 
 
 def save_checkpoint(phase_name):
-    model.save_ft_model(str(ckpt_path))
+    model.save_ft_model(str(run_dir))
     phase_file.write_text(phase_name)
-    print(f'Checkpoint saved after {phase_name}.')
+    print(f'Checkpoint saved after {phase_name} ->{run_dir}')
 
 
 def completed(phase_name):
-    """Return True if this phase was already done in a previous run."""
-    if not resume or not phase_file.exists():
+    if not phase_file.exists():
         return False
     last = phase_file.read_text().strip()
     return PHASES.index(phase_name) <= PHASES.index(last)
@@ -175,17 +173,41 @@ if __name__ == '__main__':
         if not required_path.exists():
             raise FileNotFoundError(f"Missing required path: {required_path}")
 
-    # Decide whether to load from checkpoint or start fresh
+    if resume:
+        run_dir = ft_path / resume
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Resume path not found: {run_dir}")
+    else:
+        run_dir = get_next_run_dir(ft_path)
+
+    phase_file = run_dir / 'phase.txt'
+
+    print(f'n_epochs_1: {n_epochs_1}\n'
+    f'n_epochs_2_1: {n_epochs_2_1}\n'
+    f'n_epochs_2_2: {n_epochs_2_2}\n'
+    f'n_epochs_3: {n_epochs_3}\n'
+    f'dataset_name: {dataset_name}\n'
+    f'batch_size: {batch_size}\n'
+    f'micro_batch_size: {micro_batch_size}\n'
+    f'resume: {repr(resume)}\n'
+    f'run_dir: {run_dir}\n'
+    f'lr_1: {lr_1}\n'
+    f'lr_2_1: {lr_2_1}\n'
+    f'lr_2_2: {lr_2_2}\n'
+    f'lr_3: {lr_3}\n'
+    f'max_content_len: {max_content_len}\n'
+    f'max_seq_len: {max_seq_len}\n'
+    f'min_less_portion: {min_less_portion}\n'
+    f'ft_path: {ft_path}\n'
+    f'device: {device}')
+
     if resume and phase_file.exists():
         last_phase = phase_file.read_text().strip()
-        print(f'*** Resuming from checkpoint (last completed: {last_phase}) ***')
-        model = LogLLM(str(Bert_path), str(Llama_path), ft_path=str(ckpt_path), device=device,
+        print(f'*** Resuming (last completed: {last_phase}) ->{run_dir} ***')
+        model = LogLLM(str(Bert_path), str(Llama_path), ft_path=str(run_dir), device=device,
                        max_content_len=max_content_len, max_seq_len=max_seq_len)
     else:
-        if resume:
-            print('*** resume=True but no checkpoint found — starting from scratch ***')
-        else:
-            print('*** Starting from scratch ***')
+        print(f'*** New run ->{run_dir} ***')
         model = LogLLM(str(Bert_path), str(Llama_path), device=device,
                        max_content_len=max_content_len, max_seq_len=max_seq_len)
 
@@ -252,6 +274,4 @@ if __name__ == '__main__':
     else:
         print('Skipping phase3 (already done)')
 
-    # Final save to ft_path (the "production" checkpoint)
-    model.save_ft_model(str(ft_path))
-    print(f'Training complete. Model saved to {ft_path}')
+    print(f'Training complete. Model saved to {run_dir}')
