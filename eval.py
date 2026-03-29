@@ -10,15 +10,17 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 max_content_len = 100
 max_seq_len = 128
-batch_size = 32
+batch_size = 16
 dataset_name = 'BGL'  # 'Thunderbird' 'HDFS_v1' 'BGL' 'Liberty'
 ft_dataset_name = 'HDFS' if dataset_name == 'HDFS_v1' else dataset_name
+
+run_name = 'train'  # which run to evaluate: 'train', 'train2', 'train3', ...
 
 ROOT_DIR = Path(__file__).resolve().parent
 data_path = ROOT_DIR / 'data' / dataset_name / 'test.csv'
 Bert_path = ROOT_DIR / 'models' / 'deberta-v3-large'
 Llama_path = ROOT_DIR / 'models' / 'Meta-Llama-3.1-8B'
-ft_path = ROOT_DIR / f'ft_model_{ft_dataset_name}'
+ft_path = ROOT_DIR / f'ft_model_{ft_dataset_name}' / run_name
 
 device = torch.device("cuda:0")
 
