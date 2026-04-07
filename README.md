@@ -1,5 +1,7 @@
 # LogLLM (DeBERTa-v3-Large + Llama-3.1-8B)
 
+Fork of the original project: `https://github.com/guanwei49/LogLLM`
+
 ## 1. Changes
 
 - Changed the models BERT + Llama setup to `DeBERTa-v3-Large` + `Llama-3.1-8B`.
@@ -61,3 +63,26 @@ data/
 |-- Liberty/
 `-- Thunderbird/
 ```
+
+## 5. Experiment Results
+
+I trained this on my RTX 4070 Ti Super (16GB VRAM). Since 16GB is tight for both DeBERTa and Llama, I had to make some changes to these parameters:
+
+- `micro_batch_size`: 4 → 1
+- `max_seq_len` (train): 128 → 64
+- `batch_size` (eval): 32 → 16
+
+The whole training took about 11 days.
+
+Tested on BGL dataset (9,427 test sequences: 8,610 normal, 817 anomalous).
+
+| Model | Precision | Recall | F1 | Accuracy |
+|---|---|---|---|---|
+| DeBERTa-v3-Large + Llama-3.1-8B | 0.953 | 0.955 | 0.954 | 0.992 |
+| Bert-base-uncased + Llama-3-8B (original) | 0.929 | 0.970 | 0.949 | 0.991 |
+
+| Model | Normal (detected) | Anomalous (detected) | False Detection |
+|---|---|---|---|
+| DeBERTa-v3-Large + Llama-3.1-8B | 8608 | 819 | 2 |
+| Bert-base-uncased + Llama-3-8B (original) | 8574 | 853 | 36 |
+
